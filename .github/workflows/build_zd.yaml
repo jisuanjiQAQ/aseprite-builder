@@ -1,0 +1,108 @@
+# 部分代码由kimir1.5提供，什么？你问为什么不是全部？这破玩意能写出个能用的我吃。
+name: Build and Release Aseprite (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source-code-url:
+        description: 'Aseprite source code download link'
+        required: true
+        type: string
+      skia-library-url:
+        description: 'Skia library download link for Windows'
+        required: true
+        type: string
+
+jobs:
+  build-aseprite:
+    name: Build Aseprite (Windows)
+    runs-on: windows-latest
+    env:
+      # 动态生成当前的中国时间标签
+      RELEASE_TAG: ${{ format(dateFormat('yyyy.MM.dd-HH.mm', github.event.run_started_at, 'Asia/Shanghai')) }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        shell: powershell
+        run: |
+          # Install required dependencies for Windows
+          choco install wget -y --no-progress
+
+      - name: Download Aseprite Source Code
+        uses: actions/download-artifact@v3
+        with:
+          url: ${{ github.event.inputs.source-code-url }}
+          path: aseprite-source
+
+      - name: Extract Aseprite Source Code
+        shell: powershell
+        run: |
+          Expand-Archive -Path "aseprite-source\Aseprite-Source.zip" -DestinationPath "aseprite"
+
+      - name: Download Skia Library
+        uses: actions/download-artifact@v3
+        with:
+          url: ${{ github.event.inputs.skia-library-url }}
+          path: skia
+
+      - name: Extract Skia Library
+        shell: powershell
+        run: |
+          Expand-Archive -Path "skia\Skia-Windows-Release-x64.zip" -DestinationPath "aseprite\skia"
+
+      - name: Install Ninja
+        uses: aseprite/get-ninja@main
+
+      - name: Install MSVC Development Environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Generate Makefiles
+        shell: bash
+        working-directory: aseprite
+        run: |
+          export enable_ccache=off
+          export laf_backend=skia
+          export enable_scripting=off
+          export skia_arch=x64
+
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_SCRIPTING=$enable_scripting \
+            -DENABLE_CCACHE=$enable_ccache \
+            -DLAF_BACKEND=$laf_backend \
+            -DSKIA_DIR=skia \
+            -DSKIA_LIBRARY_DIR=skia/out/Release-$skia_arch
+
+      - name: Compile
+        shell: bash
+        working-directory: aseprite
+        run: |
+          cd build && ninja
+
+      - name: Clean Up Build Folder
+        working-directory: aseprite\build\bin
+        shell: bash
+        run: |
+          find . -mindepth 1 ! \( -name 'aseprite.exe' -o -name 'data' -prune \) -exec rm -rf {} +
+
+      - name: Make Portable ZIP
+        working-directory: aseprite\build\bin
+        run: |
+          echo '# This file is here so Aseprite behaves as a portable program' > aseprite.ini
+
+      - name: Create Release
+        working-directory: aseprite\build\bin
+        run: |
+          7z -tzip a "Aseprite-$RELEASE_TAG-Windows.zip" *
+
+      - name: Upload Release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: "aseprite\\build\\bin\\Aseprite-${{ env.RELEASE_TAG }}-Windows.zip"
+          asset_name: "Aseprite-${{ env.RELEASE_TAG }}-Windows.zip"
+          tag: ${{ env.RELEASE_TAG }}
