@@ -18,7 +18,8 @@ jobs:
     name: Build Aseprite (Windows)
     runs-on: windows-latest
     env:
-      RELEASE_TAG: ${{ github.event.time }} # 动态生成的中国时间标签
+      # 动态生成当前的中国时间标签
+      RELEASE_TAG: ${{ format(dateFormat('yyyy.MM.dd-HH.mm', github.event.time, 'Asia/Shanghai')) }}
 
     steps:
       - name: Checkout Repository
@@ -96,12 +97,12 @@ jobs:
       - name: Create Release
         working-directory: aseprite\build\bin
         run: |
-          7z -tzip a "Aseprite-${{ env.RELEASE_TAG }}-Windows.zip" *
+          7z -tzip a "Aseprite-$RELEASE_TAG-Windows.zip" *
 
       - name: Upload Release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: "aseprite\build\bin\Aseprite-${{ env.RELEASE_TAG }}-Windows.zip"
-          asset_name: "Aseprite-${{ env.RELEASE_TAG }}-Windows.zip"
-          tag: ${{ env.RELEASE_TAG }}
+          file: "aseprite\build\bin\Aseprite-$RELEASE_TAG-Windows.zip"
+          asset_name: "Aseprite-$RELEASE_TAG-Windows.zip"
+          tag: $RELEASE_TAG
