@@ -19,7 +19,7 @@ jobs:
     runs-on: windows-latest
     env:
       # 动态生成当前的中国时间标签
-      RELEASE_TAG: ${{ format(dateFormat('yyyy.MM.dd-HH.mm', github.event.time, 'Asia/Shanghai')) }}
+      RELEASE_TAG: ${{ format(dateFormat('yyyy.MM.dd-HH.mm', github.event.run_started_at, 'Asia/Shanghai')) }}
 
     steps:
       - name: Checkout Repository
