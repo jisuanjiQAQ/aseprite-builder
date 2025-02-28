@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       source-code-url:
-        description: 'Aseprite 源代码下载链接'
+        description: 'Aseprite 源代码下载链接（Git 仓库链接）'
         required: true
         type: string
       skia-library-url:
-        description: 'Skia 库下载链接（Windows 版）'
+        description: 'Skia 库下载链接（Git 仓库链接）'
         required: true
         type: string
 
@@ -17,10 +17,6 @@ jobs:
   build-aseprite:
     name: 构建 Aseprite（Windows）
     runs-on: windows-latest
-    env:
-      # 动态生成当前的中国时间标签
-      RELEASE_TAG: ${{ format(dateFormat('yyyy.MM.dd-HH.mm', github.event.run_started_at, 'Asia/Shanghai')) }}
-
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -94,15 +90,22 @@ jobs:
         run: |
           echo '# 这个文件使 Aseprite 行为像便携版程序' > aseprite.ini
 
+      - name: 生成当前中国时间
+        id: time
+        shell: powershell
+        run: |
+          $currentTime = (Get-Date).ToUniversalTime().ToString('yyyy.MM.dd-HH.mm')
+          echo "current_time=$currentTime" >> $env:GITHUB_ENV
+
       - name: 创建发布文件
         working-directory: aseprite\build\bin
         run: |
-          7z -tzip a "Aseprite-${{ env.RELEASE_TAG }}-Windows.zip" *
+          7z -tzip a "Aseprite-${{ env.current_time }}-Windows.zip" *
 
       - name: 上传发布文件
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: "aseprite\\build\\bin\\Aseprite-${{ env.RELEASE_TAG }}-Windows.zip"
-          asset_name: "Aseprite-${{ env.RELEASE_TAG }}-Windows.zip"
-          tag: ${{ env.RELEASE_TAG }}
+          file: "aseprite\\build\\bin\\Aseprite-${{ env.current_time }}-Windows.zip"
+          asset_name: "Aseprite-${{ env.current_time }}-Windows.zip"
+          tag: ${{ env.current_time }}
