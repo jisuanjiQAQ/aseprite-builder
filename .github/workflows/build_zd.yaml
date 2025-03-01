@@ -1,79 +1,127 @@
 # 部分代码由kimi-r1.5提供，什么？你问为什么不是全部？这破玩意能写出个能用的我吃。
-steps:
-  - name: 检出代码
-    uses: actions/checkout@v4
+name: Build Aseprite
 
-  - name: 安装依赖项
-    shell: powershell
-    run: |
-      # 安装 Windows 所需的依赖项
-      choco upgrade wget -y --no-progress
-      choco install ninja -y  # 显式安装 Ninja
-      choco install cmake --version=3.26.4 -y  # 安装特定版本的 CMake
+on:
+  workflow_dispatch:
+    inputs:
+      aseprite-ref:
+        description: 'Aseprite 的分支或标签（Branch 或 Tag）'
+        required: true
+        type: string
+      skia-ref:
+        description: 'Skia 的分支或标签（Branch 或 Tag）'
+        required: true
+        type: string
 
-  - name: 下载 Aseprite 源代码
-    uses: actions/checkout@v4
-    with:
-      repository: aseprite/aseprite
-      path: aseprite-source
-      ref: ${{ github.event.inputs.aseprite-ref }} # 使用用户指定的分支或标签
+jobs:
+  build:
+    runs-on: windows-latest
 
-  - name: 初始化 Aseprite 子模块
-    run: |
-      git config --global --add safe.directory $PWD
-      git submodule update --init --recursive  # 初始化子模块
-    working-directory: aseprite-source
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整的 Git 历史记录
 
-  - name: 下载 Skia 库
-    uses: actions/checkout@v4
-    with:
-      repository: aseprite/skia
-      path: skia
-      ref: ${{ github.event.inputs.skia-ref }} # 使用用户指定的分支或标签
+      - name: 安装依赖项
+        shell: powershell
+        run: |
+          # 安装 wget，用于下载文件
+          choco install wget -y --no-progress
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
-  - name: 初始化 MSVC 编译环境
-    uses: ilammy/msvc-dev-cmd@v1
+          # 安装 Ninja，用于编译项目
+          choco install ninja -y
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
-  - name: 使用 CMake 配置构建环境
-    shell: powershell
-    working-directory: aseprite-source
-    run: |
-      # 设置环境变量
-      $env:PATH += ";C:\Program Files\Ninja"
+          # 安装 CMake，版本指定为 3.26.4
+          choco install cmake --version=3.26.4 -y
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      # 配置 CMake 构建文件
-      cmake -S . -B build -G "Ninja" `
-        -DCMAKE_BUILD_TYPE=Release `
-        -DENABLE_SCRIPTING=OFF `
-        -DLAF_BACKEND=skia `
-        -DSKIA_DIR=../skia `
-        -DSKIA_LIBRARY_DIR=../skia/out/Release-x64 `
-        -DSKIA_LIBRARY=../skia/out/Release-x64/libskia.lib
+          # 安装 7-Zip，用于创建 ZIP 文件
+          choco install 7zip.commandline -y
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
-  - name: 编译
-    shell: powershell
-    working-directory: aseprite-source/build
-    run: |
-      # 使用 Ninja 编译项目
-      ninja
+      - name: 下载 Aseprite 源代码
+        uses: actions/checkout@v4
+        with:
+          repository: aseprite/aseprite  # Aseprite 仓库地址
+          path: aseprite-source          # 源代码存放路径
+          ref: ${{ github.event.inputs.aseprite-ref }}  # 指定分支或版本
 
-  - name: 生成当前中国时间
-    id: time
-    shell: powershell
-    run: |
-      $currentTime = Get-Date -Format "yyyy.MM.dd-HH.mm"
-      echo "current_time=$currentTime" >> $env:GITHUB_ENV
+      - name: 初始化 Aseprite 子模块
+        run: |
+          # 检查 aseprite-source 目录是否存在
+          if (-Not (Test-Path -Path "aseprite-source")) {
+            Write-Error "aseprite-source directory does not exist!"
+            exit 1
+          }
+          # 初始化并更新子模块
+          git submodule update --init --recursive
+        working-directory: aseprite-source  # 在 Aseprite 源代码目录执行命令
 
-  - name: 创建发布文件
-    working-directory: aseprite-source/build/bin
-    run: |
-      # 创建包含构建结果的 ZIP 文件
-      7z -tzip a "Aseprite-${{ env.current_time }}-Windows.zip" *
+      - name: 下载 Skia 库
+        uses: actions/checkout@v4
+        with:
+          repository: aseprite/skia  # Skia 仓库地址
+          path: skia                 # Skia 源代码存放路径
+          ref: ${{ github.event.inputs.skia-ref }}  # 指定分支或版本
 
-  - name: 上传发布文件
-    uses: svenstaro/upload-release-action@v2
-    with:
-      repo_token: ${{ secrets.GITHUB_TOKEN }}
-      file: "aseprite-source\build\bin\Aseprite-${{ env.current_time }}-Windows.zip"
-      asset_name: "Aseprite-${{ env.current_time }}-Windows.zip"
-      tag: ${{ env.current_time }}
+      - name: 初始化 MSVC 编译环境
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: 使用 CMake 配置构建环境
+        shell: powershell
+        working-directory: aseprite-source  # 在 Aseprite 源代码目录执行命令
+        run: |
+          # 将 Ninja 添加到 PATH 环境变量
+          $env:PATH += ";C:/Program Files/Ninja"
+
+          # 获取当前时间（格式：yyyy.MM.dd-HH.mm），用于后续的构建版本命名
+          $currentTime = Get-Date -Format "yyyy.MM.dd-HH.mm"
+
+          # 配置 CMake 构建文件
+          cmake -S . -B build -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DENABLE_SCRIPTING=OFF `
+            -DLAF_BACKEND=skia `
+            -DSKIA_DIR=../skia `
+            -DSKIA_LIBRARY_DIR=../skia/out/Release-x64 `
+            -DSKIA_LIBRARY=../skia/out/Release-x64/libskia.lib
+
+      - name: 编译
+        shell: powershell
+        working-directory: aseprite-source/build  # 在构建目录执行命令
+        run: |
+          # 使用 Ninja 进行编译
+          ninja
+          if ($LASTEXITCODE -ne 0) { exit 1 }  # 如果编译失败，终止工作流
+
+      - name: 生成当前时间
+        id: time
+        shell: powershell
+        run: |
+          # 获取当前时间（格式：yyyy.MM.dd-HH.mm）
+          $currentTime = Get-Date -Format "yyyy.MM.dd-HH.mm"
+          # 将当前时间保存到 GitHub 环境变量
+          echo "current_time=$currentTime" >> $env:GITHUB_ENV
+
+      - name: 创建发布文件
+        working-directory: aseprite-source/build/bin  # 在构建输出目录执行命令
+        run: |
+          # 检查 ZIP 文件是否已存在
+          if (-Not (Test-Path -Path "Aseprite-${{ env.current_time }}-Windows.zip")) {
+            # 创建 ZIP 文件
+            7z a -tzip "Aseprite-${{ env.current_time }}-Windows.zip" *
+          } else {
+            Write-Error "ZIP file already exists!"
+            exit 1
+          }
+
+      - name: 上传发布文件
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}  # 使用 GitHub Token
+          file: "aseprite-source/build/bin/Aseprite-${{ env.current_time }}-Windows.zip"  # ZIP 文件路径
+          asset_name: "Aseprite-${{ env.current_time }}-Windows.zip"  # 上传文件的名称
+          tag: ${{ env.current_time }}  # 使用当前时间作为版本标签
