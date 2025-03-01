@@ -1,29 +1,33 @@
-name: Build and release Aseprite
+name: 构建和发布Aseprite
 
 on:
   workflow_dispatch:
     inputs:
       aseprite-ref:
-        description: 'Aseprite branch or tag to build'
+        description: 'Aseprite分支或标签'
         required: true
         default: 'main'
-      buildlog-path:
-        description: 'Path to trigger the build'
+      use-custom-skia:
+        description: '是否使用自定义的Skia库版本'
         required: true
-        default: 'BuildLog.md'
+        type: boolean
+        default: false
+      skia-ref:
+        description: 'Skia库标签（当选择使用自定义版本时）'
+        required: false
 
 env:
   BUILD_TYPE: Release
 
 jobs:
   fetch-aseprite-info:
-    name: Fetch deps info
+    name: 获取依赖信息
     runs-on: ubuntu-latest
     outputs:
       download-link: ${{ steps.aseprite-link.outputs.download-link }}
       release-tag: ${{ steps.aseprite-link.outputs.release-tag }}
     steps:
-      - name: Fetch Aseprite release link
+      - name: 获取Aseprite发布链接
         id: aseprite-link
         uses: a1393323447/fetch-release@main
         with:
@@ -32,7 +36,7 @@ jobs:
             match: Aseprite-.*?-Source.zip
 
   create-release:
-    name: Create Release
+    name: 创建发布
     runs-on: ubuntu-latest
     needs: fetch-aseprite-info
     permissions:
@@ -50,7 +54,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   build-aseprite:
-    name: Build Aseprite
+    name: 构建Aseprite
     needs: create-release
     permissions:
       contents: write
@@ -60,7 +64,7 @@ jobs:
           os: [ windows-latest, ubuntu-latest, macOS-latest ]
         fail-fast: false
     steps:
-      - name: Install Dependencies
+      - name: 安装依赖项
         if: runner.os == 'Linux'
         shell: bash
         run: |
@@ -71,11 +75,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.aseprite-ref }}
-      - name: Install Aseprite
+      - name: 安装Aseprite
         shell: bash
         run: |
           git clone --recurse-submodules -j8 https://github.com/aseprite/aseprite --branch ${{ github.event.inputs.aseprite-ref }}
-      - name: Install Skia
+      - name: 安装Skia
+        if: github.event.inputs.use-custom-skia == 'false'
         working-directory: aseprite
         shell: bash
         run: |
@@ -90,10 +95,16 @@ jobs:
             wget https://github.com/aseprite/skia/releases/download/m102-861e4743af/Skia-Linux-Release-x64-libstdc++.zip
             unzip Skia-Linux-Release-x64-libstdc++.zip -d skia
           fi
+      - name: 安装自定义Skia
+        if: github.event.inputs.use-custom-skia == 'true'
+        working-directory: aseprite
+        shell: bash
+        run: |
+          git clone --recurse-submodules -j8 https://github.com/aseprite/skia --branch ${{ github.event.inputs.skia-ref }}
       - uses: aseprite/get-ninja@main
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
-      - name: Generating Makefiles
+      - name: 生成Makefiles
         shell: bash
         working-directory: aseprite
         run: |
@@ -116,22 +127,22 @@ jobs:
             -DLAF_BACKEND=$laf_backend \
             -DSKIA_DIR=skia \
             -DSKIA_LIBRARY_DIR=skia/out/Release-$skia_arch
-      - name: Compiling
+      - name: 编译
         shell: bash
         working-directory: aseprite
         run: |
           cd build && ninja
-      - name: Clean Up Build folder
+      - name: 清理构建文件夹
         working-directory: aseprite/build/bin
         shell: bash
         run: find . -mindepth 1 ! \( -name 'aseprite' -o -name 'aseprite.exe' -o -name 'data' -prune \) -exec rm -rf {} +
-      - name: Make portable zip
+      - name: 创建便携版ZIP
         working-directory: aseprite/build/bin
         run: echo '# This file is here so Aseprite behaves as a portable program' > aseprite.ini
-      - name: Create release
+      - name: 创建发布文件
         working-directory: aseprite/build/bin
         run: 7z -tzip a Aseprite-${{ needs.create-release.outputs.release-tag }}-${{ runner.os }}.zip *
-      - name: Upload release
+      - name: 上传发布文件
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
