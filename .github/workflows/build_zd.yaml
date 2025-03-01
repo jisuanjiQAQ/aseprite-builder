@@ -4,12 +4,12 @@ name: 构建和发布 Aseprite（Windows）
 on:
   workflow_dispatch:
     inputs:
-      source-code-url:
-        description: 'Aseprite 源代码下载链接（Git 仓库链接）'
+      aseprite-ref:
+        description: 'Aseprite 的分支或标签（Branch 或 Tag）'
         required: true
         type: string
-      skia-library-url:
-        description: 'Skia 库下载链接（Git 仓库链接）'
+      skia-ref:
+        description: 'Skia 的分支或标签（Branch 或 Tag）'
         required: true
         type: string
 
@@ -25,87 +25,58 @@ jobs:
         shell: powershell
         run: |
           # 安装 Windows 所需的依赖项
-          choco install wget -y --no-progress
+          choco upgrade wget -y --no-progress
 
       - name: 下载 Aseprite 源代码
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.inputs.source-code-url }}
+          repository: https://github.com/aseprite/aseprite
           path: aseprite-source
-
-      - name: 解压 Aseprite 源代码
-        shell: powershell
-        run: |
-          Expand-Archive -Path "aseprite-source\Aseprite-Source.zip" -DestinationPath "aseprite"
+          ref: ${{ github.event.inputs.aseprite-ref }} # 使用用户指定的分支或标签
 
       - name: 下载 Skia 库
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.event.inputs.skia-library-url }}
+          repository: https://github.com/aseprite/skia.git
           path: skia
+          ref: ${{ github.event.inputs.skia-ref }} # 使用用户指定的分支或标签
 
-      - name: 解压 Skia 库
-        shell: powershell
-        run: |
-          Expand-Archive -Path "skia\Skia-Windows-Release-x64.zip" -DestinationPath "aseprite\skia"
-
-      - name: 安装 Ninja
-        uses: aseprite/get-ninja@main
-
-      - name: 安装 MSVC 开发环境
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: 生成构建文件
+      - name: 使用 CMake 配置构建环境
         shell: bash
-        working-directory: aseprite
+        working-directory: aseprite-source
         run: |
-          export enable_ccache=off
-          export laf_backend=skia
-          export enable_scripting=off
-          export skia_arch=x64
-
+          # 配置 CMake 构建文件
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DENABLE_TESTS=OFF \
-            -DENABLE_SCRIPTING=$enable_scripting \
-            -DENABLE_CCACHE=$enable_ccache \
-            -DLAF_BACKEND=$laf_backend \
-            -DSKIA_DIR=skia \
-            -DSKIA_LIBRARY_DIR=skia/out/Release-$skia_arch
+            -DENABLE_SCRIPTING=OFF \
+            -DLAF_BACKEND=skia \
+            -DSKIA_DIR=../skia \
+            -DSKIA_LIBRARY_DIR=../skia/out/Release-x64
 
       - name: 编译
         shell: bash
-        working-directory: aseprite
+        working-directory: aseprite-source/build
         run: |
-          cd build && ninja
-
-      - name: 清理构建文件夹
-        working-directory: aseprite\build\bin
-        shell: bash
-        run: |
-          find . -mindepth 1 ! \( -name 'aseprite.exe' -o -name 'data' -prune \) -exec rm -rf {} +
-
-      - name: 创建便携版 ZIP 文件
-        working-directory: aseprite\build\bin
-        run: |
-          echo '# 这个文件使 Aseprite 行为像便携版程序' > aseprite.ini
+          # 使用 Ninja 编译项目
+          ninja
 
       - name: 生成当前中国时间
         id: time
         shell: powershell
         run: |
-          $currentTime = (Get-Date).ToUniversalTime().ToString('yyyy.MM.dd-HH.mm')
+          $currentTime = Get-Date -Format "yyyy.MM.dd-HH.mm"
           echo "current_time=$currentTime" >> $env:GITHUB_ENV
 
       - name: 创建发布文件
-        working-directory: aseprite\build\bin
+        working-directory: aseprite-source/build/bin
         run: |
+          # 创建包含构建结果的 ZIP 文件
           7z -tzip a "Aseprite-${{ env.current_time }}-Windows.zip" *
 
       - name: 上传发布文件
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: "aseprite\\build\\bin\\Aseprite-${{ env.current_time }}-Windows.zip"
+          file: "aseprite-source\\build\\bin\\Aseprite-${{ env.current_time }}-Windows.zip"
           asset_name: "Aseprite-${{ env.current_time }}-Windows.zip"
           tag: ${{ env.current_time }}
