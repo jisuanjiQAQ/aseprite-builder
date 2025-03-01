@@ -30,14 +30,14 @@ jobs:
       - name: 下载 Aseprite 源代码
         uses: actions/checkout@v4
         with:
-          repository: https://github.com/aseprite/aseprite
+          repository: aseprite/aseprite
           path: aseprite-source
           ref: ${{ github.event.inputs.aseprite-ref }} # 使用用户指定的分支或标签
 
       - name: 下载 Skia 库
         uses: actions/checkout@v4
         with:
-          repository: https://github.com/aseprite/skia.git
+          repository: aseprite/skia
           path: skia
           ref: ${{ github.event.inputs.skia-ref }} # 使用用户指定的分支或标签
 
