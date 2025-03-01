@@ -1,4 +1,4 @@
-# 部分代码由kimir1.5提供，什么？你问为什么不是全部？这破玩意能写出个能用的我吃。
+# 部分代码由kimi-r1.5提供，什么？你问为什么不是全部？这破玩意能写出个能用的我吃。
 name: 构建和发布 Aseprite（Windows）
 
 on:
@@ -26,6 +26,7 @@ jobs:
         run: |
           # 安装 Windows 所需的依赖项
           choco upgrade wget -y --no-progress
+          choco install ninja -y  # 显式安装 Ninja
 
       - name: 下载 Aseprite 源代码
         uses: actions/checkout@v4
@@ -41,20 +42,26 @@ jobs:
           path: skia
           ref: ${{ github.event.inputs.skia-ref }} # 使用用户指定的分支或标签
 
+      - name: 初始化 MSVC 编译环境
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: 使用 CMake 配置构建环境
-        shell: bash
+        shell: powershell
         working-directory: aseprite-source
         run: |
+          # 设置环境变量
+          $env:PATH += ";C:\Program Files\Ninja"
+
           # 配置 CMake 构建文件
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DENABLE_SCRIPTING=OFF \
-            -DLAF_BACKEND=skia \
-            -DSKIA_DIR=../skia \
+          cmake -S . -B build -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DENABLE_SCRIPTING=OFF `
+            -DLAF_BACKEND=skia `
+            -DSKIA_DIR=../skia `
             -DSKIA_LIBRARY_DIR=../skia/out/Release-x64
 
       - name: 编译
-        shell: bash
+        shell: powershell
         working-directory: aseprite-source/build
         run: |
           # 使用 Ninja 编译项目
