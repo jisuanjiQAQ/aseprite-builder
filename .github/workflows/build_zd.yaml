@@ -34,8 +34,8 @@ jobs:
           choco install ninja -y
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-          # 安装 CMake，版本指定为 3.26.4
-          choco install cmake --version=3.26.4 -y
+          # 安装 CMake
+          choco install cmake -y
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
           # 安装 7-Zip，用于创建 ZIP 文件
