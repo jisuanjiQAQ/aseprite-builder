@@ -70,12 +70,7 @@ jobs:
           git clone --recurse-submodules -j8 https://github.com/aseprite/aseprite
           cd aseprite
           git switch v1.3.14.4
-          # 去掉所有 branch = xxx 的行（无论它指向 tag 还是分支）
-          sed -i '/^\s*branch\s*=/d' .gitmodules
-          # 让改动立即生效
-          git config -f .gitconfig submodule.recurse true
           git submodule sync
-          git submodule update --init --recursive --depth 1
           cd ..
       - name: Install Skia
         working-directory: aseprite
