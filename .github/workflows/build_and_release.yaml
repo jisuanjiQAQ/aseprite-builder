@@ -70,7 +70,7 @@ jobs:
           git clone --recurse-submodules -j8 https://github.com/aseprite/aseprite
           cd aseprite
           git switch v1.3.14.4
-          git submodule update
+          git submodule update --init --recursive --depth 1 --detach
           cd ..
       - name: Install Skia
         working-directory: aseprite
